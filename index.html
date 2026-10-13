@@ -8,6 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Whale Watch">
+<script>try { const t = localStorage.getItem('ww.theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -18,6 +19,26 @@
     --bid: #2ea043; --ask: #f85149; --bid-bg: rgba(46,160,67,.18); --ask-bg: rgba(248,81,73,.18);
     --whale: #d29922; --whale-bg: rgba(210,153,34,.22);
   }
+  /* Light theme: follows the system unless the user picked a theme explicitly */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+    --bg: #f6f8fa; --panel: #ffffff; --line: #d0d7de; --text: #1f2328; --muted: #59636e;
+    --bid: #1a7f37; --ask: #cf222e; --bid-bg: rgba(26,127,55,.14); --ask-bg: rgba(207,34,46,.12);
+    --whale: #9a6700; --whale-bg: rgba(212,167,44,.25);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f8fa; --panel: #ffffff; --line: #d0d7de; --text: #1f2328; --muted: #59636e;
+    --bid: #1a7f37; --ask: #cf222e; --bid-bg: rgba(26,127,55,.14); --ask-bg: rgba(207,34,46,.12);
+    --whale: #9a6700; --whale-bg: rgba(212,167,44,.25);
+  }
+  /* Header stays dark in both themes: the iOS standalone status bar text is always white */
+  header {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --bid: #2ea043; --ask: #f85149; --bid-bg: rgba(46,160,67,.18); --ask-bg: rgba(248,81,73,.18);
+    --whale: #d29922; --whale-bg: rgba(210,153,34,.22);
+    background: var(--bg); color: var(--text);
+  }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
   body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -27,6 +48,7 @@
   input, select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
   #sym { width: 110px; text-transform: uppercase; }
   #thr { width: 110px; }
+  #theme { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
   #status { margin-left: auto; color: var(--muted); }
   #status.ok::before { content: "● "; color: var(--bid); }
   main { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 16px; padding: 16px 16px max(16px, env(safe-area-inset-bottom)); }
@@ -70,6 +92,7 @@
   <label>Шаг <select id="step"></select></label>
   <label>Кит от $ <input id="thr" type="number" value="500000" step="50000" min="0"></label>
   <label><input type="checkbox" id="snd"> звук</label>
+  <button id="theme" type="button" title="Тема: авто / светлая / тёмная">◐ авто</button>
   <span id="status">—</span>
 </header>
 <main>
@@ -370,6 +393,20 @@ $('snd').addEventListener('change', () => {
   save();
   if ($('snd').checked) { audio ||= new AudioContext(); audio.resume(); }
 });
+
+// Theme toggle: auto (system) -> light -> dark
+const THEMES = [['', '◐ авто'], ['light', '☀ светлая'], ['dark', '☾ тёмная']];
+const setTheme = t => {
+  t ? document.documentElement.dataset.theme = t : delete document.documentElement.dataset.theme;
+  $('theme').textContent = THEMES.find(x => x[0] === t)[1];
+  try { t ? localStorage.setItem('ww.theme', t) : localStorage.removeItem('ww.theme'); } catch {}
+  render();
+};
+setTheme(document.documentElement.dataset.theme || '');
+$('theme').onclick = () => {
+  const i = THEMES.findIndex(x => x[0] === (document.documentElement.dataset.theme || ''));
+  setTheme(THEMES[(i + 1) % THEMES.length][0]);
+};
 
 // iOS freezes background apps and kills the socket; reconnect with a fresh snapshot on return
 document.addEventListener('visibilitychange', () => {

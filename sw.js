@@ -1,5 +1,5 @@
 // App shell cache: the page opens instantly and offline; market data always comes live from Binance.
-const CACHE = 'whale-watch-v1';
+const CACHE = 'whale-watch-v2';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
