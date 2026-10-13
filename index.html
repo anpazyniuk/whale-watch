@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Whale Watch">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Whale Watch</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --bid: #2ea043; --ask: #f85149; --bid-bg: rgba(46,160,67,.18); --ask-bg: rgba(248,81,73,.18);
+    --whale: #d29922; --whale-bg: rgba(210,153,34,.22);
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid var(--line); }
+  h1 { font-size: 16px; margin: 0 8px 0 0; }
+  label { color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  input, select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
+  #sym { width: 110px; text-transform: uppercase; }
+  #thr { width: 110px; }
+  #status { margin-left: auto; color: var(--muted); }
+  #status.ok::before { content: "● "; color: var(--bid); }
+  main { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 16px; padding: 16px 16px max(16px, env(safe-area-inset-bottom)); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+  h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .stats div { color: var(--muted); } .stats b { display: block; color: var(--text); font-size: 14px; }
+  .imb { height: 6px; border-radius: 3px; background: var(--ask); overflow: hidden; margin-bottom: 12px; }
+  .imb span { display: block; height: 100%; background: var(--bid); transition: width .3s; }
+  .row, .cols { display: grid; grid-template-columns: 1.2fr 1fr 1fr; padding: 1px 6px; }
+  .row span:not(:first-child), .cols span:not(:first-child) { text-align: right; }
+  .cols { color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .row { position: relative; }
+  .row i { position: absolute; top: 0; bottom: 0; right: 0; z-index: 0; }
+  .row span { position: relative; z-index: 1; }
+  .ask span:first-child { color: var(--ask); } .ask i { background: var(--ask-bg); }
+  .bid span:first-child { color: var(--bid); } .bid i { background: var(--bid-bg); }
+  .row.whale { outline: 1px solid var(--whale); background: var(--whale-bg); }
+  .row.whale span:last-child::before { content: "🐋 "; }
+  #mid { text-align: center; padding: 6px; font-size: 15px; font-weight: 700; border-block: 1px solid var(--line); margin: 4px 0; }
+  .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .walls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .walls ol { margin: 0; padding-left: 18px; } .walls li { margin: 2px 0; }
+  #feed { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+  #feed li { padding: 5px 4px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+  #feed time { color: var(--muted); flex: none; }
+  #feed .buy { color: var(--bid); } #feed .sell { color: var(--ask); } #feed .spoof { color: var(--whale); }
+  #feed li.fresh { animation: flash 1.2s; }
+  @keyframes flash { from { background: var(--whale-bg); } to { background: transparent; } }
+  .muted { color: var(--muted); }
+  .hrow { display: flex; justify-content: space-between; align-items: center; }
+  .hrow label { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  #depth { width: 100%; height: 260px; display: block; cursor: crosshair; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐋 Whale Watch</h1>
+  <label>Пара <input id="sym" value="BTCUSDT" spellcheck="false"></label>
+  <label>Шаг <select id="step"></select></label>
+  <label>Кит от $ <input id="thr" type="number" value="500000" step="50000" min="0"></label>
+  <label><input type="checkbox" id="snd"> звук</label>
+  <span id="status">—</span>
+</header>
+<main>
+  <section>
+    <div class="stats">
+      <div>Спред<b id="spread">—</b></div>
+      <div>Bid ±1%<b id="bidvol">—</b></div>
+      <div>Ask ±1%<b id="askvol">—</b></div>
+    </div>
+    <div class="imb" title="Дисбаланс bid/ask в пределах 1% от цены"><span id="imb" style="width:50%"></span></div>
+    <div class="cols"><span>Цена</span><span id="qtyHead">Объём</span><span>Сумма</span></div>
+    <div id="asks"></div>
+    <div id="mid">—</div>
+    <div id="bids"></div>
+  </section>
+  <div class="side">
+    <section>
+      <h2 class="hrow">График глубины
+        <label>±<select id="range"><option>0.5</option><option selected>1</option><option>2</option><option>5</option></select>%</label>
+      </h2>
+      <canvas id="depth"></canvas>
+    </section>
+    <section>
+      <h2>Крупнейшие стены (весь стакан)</h2>
+      <div class="walls"><ol id="wallBids"></ol><ol id="wallAsks"></ol></div>
+    </section>
+    <section>
+      <h2>Лента китов</h2>
+      <ul id="feed"><li class="muted">Ждём китов…</li></ul>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const ROWS = matchMedia('(max-width: 860px)').matches ? 10 : 18;
+const bids = new Map(), asks = new Map();   // price string -> qty
+const recentTrades = new Map();             // price number -> {q, t}
+let ws, gen = 0, synced = false, buffer = [], lastU = 0, step = null, base = '';
+
+const usd = n => n >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? '$' + (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? '$' + (n / 1e3).toFixed(0) + 'K' : '$' + n.toFixed(0);
+const decimals = s => Math.max(0, -Math.floor(Math.log10(s) + 1e-9));
+const fmtP = p => p.toLocaleString('en-US', { minimumFractionDigits: decimals(step), maximumFractionDigits: decimals(step) });
+const fmtQ = q => q >= 1000 ? q.toLocaleString('en-US', { maximumFractionDigits: 0 }) : q.toPrecision(4).replace(/\.?0+$/, '');
+const threshold = () => +$('thr').value || Infinity;
+const status = (t, ok) => { $('status').textContent = t; $('status').className = ok ? 'ok' : ''; };
+
+function start() {
+  const sym = $('sym').value.trim().toUpperCase();
+  const my = ++gen;
+  if (ws) ws.close();
+  bids.clear(); asks.clear(); recentTrades.clear();
+  synced = false; buffer = []; step = null;
+  base = sym.replace(/(USDT|USDC|FDUSD|BUSD|BTC|ETH|TRY|EUR)$/, '') || sym;
+  $('qtyHead').textContent = 'Объём ' + base;
+  status('подключение…');
+  const s = sym.toLowerCase();
+  ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${s}@depth@100ms/${s}@aggTrade`);
+  ws.onopen = () => snapshot(sym, my);
+  ws.onmessage = e => {
+    if (my !== gen) return;
+    const { stream, data } = JSON.parse(e.data);
+    stream.endsWith('aggTrade') ? onTrade(data) : onDepth(data);
+  };
+  ws.onclose = () => { if (my === gen) { status('переподключение…'); setTimeout(() => my === gen && start(), 2000); } };
+}
+
+// Binance local order book sync: buffer diffs, load snapshot, replay diffs after lastUpdateId
+async function snapshot(sym, my) {
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/depth?symbol=${sym}&limit=5000`);
+    const s = await r.json();
+    if (!r.ok) throw new Error(s.msg || r.status);
+    if (my !== gen) return;
+    bids.clear(); asks.clear();
+    for (const [p, q] of s.bids) bids.set(p, +q);
+    for (const [p, q] of s.asks) asks.set(p, +q);
+    lastU = s.lastUpdateId;
+    synced = true;
+    const pending = buffer; buffer = [];
+    pending.forEach(onDepth);
+    status('онлайн', true);
+  } catch (err) {
+    status('ошибка: ' + err.message);
+  }
+}
+
+function onDepth(ev) {
+  if (!synced) { buffer.push(ev); return; }
+  if (ev.u <= lastU) return;
+  if (ev.U > lastU + 1) { synced = false; buffer = [ev]; status('ресинк…'); snapshot($('sym').value.trim().toUpperCase(), gen); return; }
+  apply(ev.b, bids, true);
+  apply(ev.a, asks, false);
+  lastU = ev.u;
+}
+
+function apply(levels, book, isBid) {
+  const thr = threshold();
+  for (const [ps, qs] of levels) {
+    const q = +qs, p = +ps, old = book.get(ps) || 0;
+    q === 0 ? book.delete(ps) : book.set(ps, q);
+    const dq = q - old, notional = Math.abs(dq) * p;
+    if (notional < thr) continue;
+    const where = `${isBid ? 'bid' : 'ask'} @ ${fmtNum(p)} (${dist(p)})`;
+    if (dq > 0) {
+      alertWhale(isBid ? 'buy' : 'sell', `🧱 Поставил ${isBid ? 'покупку' : 'продажу'} ${fmtQ(dq)} ${base} · ${usd(notional)} · ${where}`);
+    } else {
+      const tr = recentTrades.get(p);
+      const filled = tr && Date.now() - tr.t < 3000 ? tr.q : 0;
+      if (filled >= -dq * 0.5) alertWhale(isBid ? 'sell' : 'buy', `🍽 Съели стену ${fmtQ(-dq)} ${base} · ${usd(notional)} · ${where}`);
+      else alertWhale('spoof', `👻 Снял заявку ${fmtQ(-dq)} ${base} · ${usd(notional)} · ${where} — без сделок, возможен спуфинг`);
+    }
+  }
+}
+
+function onTrade(t) {
+  const p = +t.p, q = +t.q, now = Date.now();
+  const prev = recentTrades.get(p);
+  recentTrades.set(p, { q: (prev && now - prev.t < 3000 ? prev.q : 0) + q, t: now });
+  const notional = p * q;
+  if (notional < threshold()) return;
+  const sell = t.m; // buyer is maker => aggressor sold
+  alertWhale(sell ? 'sell' : 'buy', `${sell ? '🔻 Продал' : '🔺 Купил'} по рынку ${fmtQ(q)} ${base} · ${usd(notional)} @ ${fmtNum(p)}`);
+}
+
+function mid() {
+  const bb = bestBid(), ba = bestAsk();
+  return bb && ba ? (bb + ba) / 2 : bb || ba || 0;
+}
+const bestBid = () => { let m = 0; for (const k of bids.keys()) if (+k > m) m = +k; return m; };
+const bestAsk = () => { let m = Infinity; for (const k of asks.keys()) if (+k < m) m = +k; return m === Infinity ? 0 : m; };
+const fmtNum = p => step ? fmtP(p) : String(p);
+const dist = p => { const m = mid(); if (!m) return ''; const d = (p - m) / m * 100; return (d >= 0 ? '+' : '') + d.toFixed(2) + '%'; };
+
+let audio;
+function beep(kind) {
+  if (!$('snd').checked) return;
+  if (!audio) return;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.frequency.value = kind === 'buy' ? 880 : kind === 'sell' ? 440 : 660;
+  g.gain.setValueAtTime(0.15, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.25);
+  o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.25);
+}
+
+function alertWhale(kind, text) {
+  const feed = $('feed');
+  if (feed.firstElementChild?.classList.contains('muted')) feed.innerHTML = '';
+  const li = document.createElement('li');
+  li.className = 'fresh';
+  const time = document.createElement('time');
+  time.textContent = new Date().toLocaleTimeString('ru-RU');
+  const span = document.createElement('span');
+  span.className = kind; span.textContent = text;
+  li.append(time, span);
+  feed.prepend(li);
+  while (feed.children.length > 150) feed.lastChild.remove();
+  beep(kind);
+}
+
+function buildSteps(price) {
+  const b = Math.pow(10, Math.floor(Math.log10(price))) / 1e5;
+  const sel = $('step');
+  sel.innerHTML = '';
+  for (const m of [1, 5, 10, 50, 100, 500, 1000]) {
+    const v = +(b * m).toPrecision(6);
+    sel.add(new Option(v.toString(), v));
+  }
+  sel.value = sel.options[2].value;
+  step = +sel.value;
+}
+
+function group(book, isBid) {
+  const m = new Map();
+  for (const [ps, q] of book) {
+    const k = +((isBid ? Math.floor(+ps / step + 1e-9) : Math.ceil(+ps / step - 1e-9)) * step).toFixed(decimals(step));
+    m.set(k, (m.get(k) || 0) + q);
+  }
+  return [...m].sort((a, b) => isBid ? b[0] - a[0] : a[0] - b[0]).slice(0, ROWS);
+}
+
+function rows(levels, cls, maxN, thr) {
+  return levels.map(([p, q]) => {
+    const n = p * q;
+    return `<div class="row ${cls}${n >= thr ? ' whale' : ''}"><i style="width:${(n / maxN * 100).toFixed(1)}%"></i><span>${fmtP(p)}</span><span>${fmtQ(q)}</span><span>${usd(n)}</span></div>`;
+  }).join('');
+}
+
+function topWalls(book, isBid) {
+  return [...book].map(([p, q]) => [+p, q, +p * q]).sort((a, b) => b[2] - a[2]).slice(0, 5)
+    .map(([p, q, n]) => `<li><span class="${isBid ? 'buy' : 'sell'}">${fmtP(p)}</span> ${usd(n)} <span class="muted">${dist(p)}</span></li>`).join('');
+}
+
+function render() {
+  if (!synced || !bids.size || !asks.size) return;
+  const bb = bestBid(), ba = bestAsk(), m = (bb + ba) / 2;
+  if (step === null) buildSteps(m);
+  const thr = threshold();
+  const a = group(asks, false), b = group(bids, true);
+  const maxN = Math.max(...a.map(([p, q]) => p * q), ...b.map(([p, q]) => p * q));
+  $('asks').innerHTML = rows(a.reverse(), 'ask', maxN, thr);
+  $('bids').innerHTML = rows(b, 'bid', maxN, thr);
+  $('mid').textContent = m.toLocaleString('en-US', { maximumFractionDigits: 8 });
+  $('spread').textContent = (ba - bb).toPrecision(4) + ' (' + ((ba - bb) / m * 1e4).toFixed(2) + ' bp)';
+  let bv = 0, av = 0;
+  for (const [p, q] of bids) if (+p >= m * 0.99) bv += +p * q;
+  for (const [p, q] of asks) if (+p <= m * 1.01) av += +p * q;
+  $('bidvol').textContent = usd(bv);
+  $('askvol').textContent = usd(av);
+  $('imb').style.width = (bv / (bv + av) * 100 || 50).toFixed(1) + '%';
+  $('wallBids').innerHTML = topWalls(bids, true);
+  $('wallAsks').innerHTML = topWalls(asks, false);
+  drawDepth(bb, ba, m, thr);
+  document.title = `${m.toLocaleString('en-US', { maximumFractionDigits: 2 })} · Whale Watch`;
+}
+
+// Depth chart: cumulative USD liquidity from mid outwards, step-shaped
+const css = getComputedStyle(document.documentElement);
+const C = k => css.getPropertyValue(k).trim();
+let hoverX = null;
+$('depth').onmousemove = e => { hoverX = e.offsetX; };
+$('depth').onmouseleave = () => { hoverX = null; };
+
+function cumulative(book, isBid, limit) {
+  const lv = [];
+  for (const [ps, q] of book) { const p = +ps; if (isBid ? p >= limit : p <= limit) lv.push([p, q]); }
+  lv.sort((a, b) => isBid ? b[0] - a[0] : a[0] - b[0]);
+  let cum = 0;
+  return lv.map(([p, q]) => { const n = p * q; cum += n; return { p, n, before: cum - n, cum }; });
+}
+
+function drawDepth(bb, ba, m, thr) {
+  const cv = $('depth'), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== W * dpr || cv.height !== H * dpr) { cv.width = W * dpr; cv.height = H * dpr; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const r = +$('range').value / 100, lo = m * (1 - r), hi = m * (1 + r);
+  const b = cumulative(bids, true, lo), a = cumulative(asks, false, hi);
+  const maxV = Math.max(b.at(-1)?.cum || 0, a.at(-1)?.cum || 0) * 1.08 || 1;
+  const pad = { l: 6, r: 56, t: 8, b: 20 };
+  const x = p => pad.l + (p - lo) / (hi - lo) * (W - pad.l - pad.r);
+  const y = v => H - pad.b - v / maxV * (H - pad.t - pad.b);
+
+  ctx.font = '11px ui-monospace, Menlo, monospace';
+  ctx.strokeStyle = C('--line'); ctx.fillStyle = C('--muted'); ctx.lineWidth = 1;
+  for (let i = 1; i <= 3; i++) {   // horizontal grid + USD labels
+    const v = maxV / 1.08 * i / 3, yy = Math.round(y(v)) + .5;
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy); ctx.stroke();
+    ctx.fillText(usd(v), W - pad.r + 4, yy + 4);
+  }
+  ctx.textAlign = 'center';
+  for (const p of [lo, m, hi]) ctx.fillText(fmtP(p), Math.min(Math.max(x(p), 40), W - pad.r - 30), H - 5);
+  ctx.textAlign = 'left';
+
+  const side = (lv, start, end, color, fill) => {
+    if (!lv.length) return;
+    ctx.beginPath(); ctx.moveTo(x(start), y(0));
+    for (const l of lv) { ctx.lineTo(x(l.p), y(l.before)); ctx.lineTo(x(l.p), y(l.cum)); }
+    ctx.lineTo(x(end), y(lv.at(-1).cum));
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.lineTo(x(end), y(0)); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.fillStyle = C('--whale');   // whale walls = vertical jumps, mark them
+    for (const l of lv) if (l.n >= thr) { ctx.beginPath(); ctx.arc(x(l.p), y(l.cum), 3.5, 0, 7); ctx.fill(); }
+  };
+  side(b, bb, lo, C('--bid'), C('--bid-bg'));
+  side(a, ba, hi, C('--ask'), C('--ask-bg'));
+
+  ctx.setLineDash([3, 3]); ctx.strokeStyle = C('--muted');
+  ctx.beginPath(); ctx.moveTo(x(m) + .5, pad.t); ctx.lineTo(x(m) + .5, H - pad.b); ctx.stroke();
+  ctx.setLineDash([]);
+
+  if (hoverX !== null && hoverX > pad.l && hoverX < W - pad.r) {
+    const p = lo + (hoverX - pad.l) / (W - pad.l - pad.r) * (hi - lo);
+    const isBid = p < m, lv = isBid ? b : a;
+    let v = 0;
+    for (const l of lv) { if (isBid ? l.p >= p : l.p <= p) v = l.cum; else break; }
+    ctx.strokeStyle = C('--text'); ctx.globalAlpha = .4;
+    ctx.beginPath(); ctx.moveTo(hoverX + .5, pad.t); ctx.lineTo(hoverX + .5, H - pad.b); ctx.stroke();
+    ctx.globalAlpha = 1;
+    const text = `${fmtP(p)} · ${dist(p)} · ${isBid ? 'покупки' : 'продажи'} ${usd(v)}`;
+    const tw = ctx.measureText(text).width + 12, tx = Math.min(hoverX + 8, W - pad.r - tw);
+    ctx.fillStyle = C('--panel'); ctx.fillRect(tx, pad.t, tw, 20);
+    ctx.strokeStyle = C('--line'); ctx.strokeRect(tx + .5, pad.t + .5, tw, 20);
+    ctx.fillStyle = isBid ? C('--bid') : C('--ask'); ctx.fillText(text, tx + 6, pad.t + 14);
+  }
+}
+
+setInterval(render, 250);
+setInterval(() => { const now = Date.now(); for (const [p, t] of recentTrades) if (now - t.t > 5000) recentTrades.delete(p); }, 5000);
+$('step').onchange = e => { step = +e.target.value; };
+// Remember settings between launches (best effort: storage may be unavailable)
+const SAVED = ['sym', 'thr', 'range'];
+try { for (const id of SAVED) { const v = localStorage.getItem('ww.' + id); if (v !== null) $(id).value = v; } $('snd').checked = localStorage.getItem('ww.snd') === '1'; } catch {}
+const save = () => { try { for (const id of SAVED) localStorage.setItem('ww.' + id, $(id).value); localStorage.setItem('ww.snd', $('snd').checked ? '1' : '0'); } catch {} };
+for (const id of SAVED) $(id).addEventListener('change', save);
+$('snd').addEventListener('change', () => {
+  save();
+  if ($('snd').checked) { audio ||= new AudioContext(); audio.resume(); }
+});
+
+// iOS freezes background apps and kills the socket; reconnect with a fresh snapshot on return
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && (!ws || ws.readyState !== WebSocket.OPEN)) start();
+});
+
+if ('serviceWorker' in navigator && isSecureContext && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
+
+$('sym').onchange = start;
+start();
+</script>
+</body>
+</html>
