@@ -1,5 +1,5 @@
 // App shell cache: the page opens instantly and offline; market data always comes live from Binance.
-const CACHE = 'whale-watch-v2';
+const CACHE = 'whale-watch-v3';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -17,7 +17,8 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    // no-cache: revalidate with the server (ETag) instead of trusting GitHub Pages' 10-minute HTTP cache
+    fetch(e.request, { cache: 'no-cache' })
       .then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r; })
       .catch(() => caches.match(e.request).then(r => r || caches.match('./')))
   );
